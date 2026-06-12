@@ -9,11 +9,11 @@ import { google } from "googleapis";
 function getCalendarClient() {
   if (
     !process.env.GOOGLE_CALENDAR_CLIENT_ID ||
-    process.env.GOOGLE_CALENDAR_CLIENT_ID.includes("placeholder") ||
+    process.env.GOOGLE_CALENDAR_CLIENT_ID?.includes("placeholder") ||
     !process.env.GOOGLE_CALENDAR_CLIENT_SECRET ||
-    process.env.GOOGLE_CALENDAR_CLIENT_SECRET.includes("placeholder") ||
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET?.includes("placeholder") ||
     !process.env.GOOGLE_CALENDAR_REFRESH_TOKEN ||
-    process.env.GOOGLE_CALENDAR_REFRESH_TOKEN.includes("placeholder")
+    process.env.GOOGLE_CALENDAR_REFRESH_TOKEN?.includes("placeholder")
   ) {
     console.warn("[Calendar] Google Calendar credentials not configured (or placeholders)");
     return null;

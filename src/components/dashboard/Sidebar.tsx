@@ -25,7 +25,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onClose }: SidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
 
   return (
     <aside className="w-64 h-screen sticky top-0 flex flex-col border-r border-border bg-card/50 backdrop-blur-xl">

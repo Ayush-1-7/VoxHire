@@ -10,7 +10,11 @@ let vapiInstance: Vapi | null = null;
 
 function getVapiInstance(): Vapi {
   if (!vapiInstance) {
-    vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY!);
+    const apiKey = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
+    if (!apiKey) {
+      throw new Error("VAPI public key is not configured");
+    }
+    vapiInstance = new Vapi(apiKey);
   }
   return vapiInstance;
 }
@@ -110,7 +114,7 @@ export function useVapi() {
 
     const handleVolumeLevel = (level: number) => setVolumeLevel(level);
 
-    const handleError = (err: Error) => {
+    const handleError = (err: unknown) => {
       console.error("[VAPI] Error:", err);
       setError(getErrorMessage(err));
       setCallStatus("error");
@@ -201,15 +205,23 @@ export function useVapi() {
   };
 }
 
-function getErrorMessage(err: Error): string {
-  if (err.message.includes("microphone")) {
+function getErrorMessage(err: unknown): string {
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === "object" && err !== null && "message" in err
+        ? String((err as { message?: unknown }).message ?? "")
+        : String(err ?? "");
+
+  const lower = message.toLowerCase();
+  if (lower.includes("microphone")) {
     return "Microphone access denied. Please allow microphone and refresh.";
   }
-  if (err.message.includes("network")) {
+  if (lower.includes("network")) {
     return "Network error. Please check your connection.";
   }
-  if (err.message.includes("rate limit")) {
+  if (lower.includes("rate limit")) {
     return "Too many calls. Please wait a moment.";
   }
-  return "Connection failed. Please try again.";
+  return message || "Connection failed. Please try again.";
 }

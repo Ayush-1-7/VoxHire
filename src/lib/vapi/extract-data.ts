@@ -1,9 +1,5 @@
 import type { ExtractedCandidateData } from "@/types/vapi";
 
-function safeText(text: string | undefined | null): string {
-  return text ?? "";
-}
-
 function extractEmailFromTurn(turnText: string): string | null {
   // 1. Try direct match first
   const directMatch = turnText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
@@ -105,7 +101,7 @@ export async function extractCandidateData(
   // 2. Fallback / Augment using robust transcript text matching
   const userLines = transcript
     .filter((t) => t.role === "user")
-    .map((t) => safeText(t.text))
+    .map((t) => t.text)
     .join(" ");
 
   const wordToDigitMap: Record<string, string> = {
@@ -116,7 +112,7 @@ export async function extractCandidateData(
   if (!email) {
     for (const entry of transcript) {
       if (entry.role === "user") {
-        const extracted = extractEmailFromTurn(safeText(entry.text));
+        const extracted = extractEmailFromTurn(entry.text);
         if (extracted) {
           email = extracted;
           break;
@@ -128,7 +124,7 @@ export async function extractCandidateData(
   if (!phone) {
     for (const entry of transcript) {
       if (entry.role === "user") {
-        let phoneNormalized = safeText(entry.text).toLowerCase();
+        let phoneNormalized = entry.text.toLowerCase();
         // Remove commas and periods that split digit sequences in STT
         phoneNormalized = phoneNormalized.replace(/[,.]/g, " ");
         
@@ -160,7 +156,7 @@ export async function extractCandidateData(
     // 1. Scan assistant acknowledgements for names
     for (const entry of transcript) {
       if (entry.role === "assistant") {
-        const ackMatch = safeText(entry.text).match(/\b(?:thank you|thanks|hi|hello|perfect|great),\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/);
+        const ackMatch = entry.text.match(/\b(?:thank you|thanks|hi|hello|perfect|great),\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/);
         if (ackMatch) {
           extractedNames.push(ackMatch[1]);
         }
@@ -170,7 +166,7 @@ export async function extractCandidateData(
     // 2. Scan user turns for name introductions
     for (const entry of transcript) {
       if (entry.role === "user") {
-        const introMatch = safeText(entry.text).match(/(?:my name is|i am|this is|i'm|call me)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i);
+        const introMatch = entry.text.match(/(?:my name is|i am|this is|i'm|call me)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i);
         if (introMatch) {
           extractedNames.push(introMatch[1]);
         }
@@ -179,17 +175,14 @@ export async function extractCandidateData(
 
     // 3. Scan user response right after assistant asks for name
     for (let i = 0; i < transcript.length; i++) {
-      if (transcript[i].role !== "assistant") continue;
-
-      const text = safeText(transcript[i].text).toLowerCase();
+      const text = transcript[i].text.toLowerCase();
       if (
-        text.includes("your full name") ||
-        text.includes("your name") ||
-        text.includes("who am i speaking with")
+        transcript[i].role === "assistant" &&
+        (text.includes("your full name") || text.includes("your name") || text.includes("who am i speaking with"))
       ) {
         for (let j = i + 1; j < transcript.length; j++) {
           if (transcript[j].role === "user") {
-            const userText = safeText(transcript[j].text).trim();
+            const userText = transcript[j].text.trim();
             const globalCapRegex = /\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\b/g;
             let match;
             while ((match = globalCapRegex.exec(userText)) !== null) {

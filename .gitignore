@@ -45,3 +45,5 @@ prisma/migrations/
 
 # Legacy backup (keep for reference)
 # _legacy/
+
+.vercel

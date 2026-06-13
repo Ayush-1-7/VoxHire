@@ -60,7 +60,7 @@ export function VoiceAgent() {
       .find((t) => t.role === "assistant");
     if (!lastAssistant) return;
 
-    const text = (lastAssistant.text ?? "").toLowerCase();
+    const text = lastAssistant.text.toLowerCase();
     const stepKeywords = [
       { keywords: ["your name", "full name", "may i know your name"], step: 0 },
       { keywords: ["phone number", "phone", "contact number", "reach you"], step: 1 },

@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "check:config": "node scripts/check-config.mjs",
     "google:token": "node scripts/get-google-calendar-token.mjs",
+    "test:extract": "ts-node --transpile-only --project scripts/tsconfig.json scripts/test-extraction.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

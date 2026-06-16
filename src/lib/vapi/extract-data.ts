@@ -99,7 +99,7 @@ const NAME_STOPWORDS = new Set([
   "application", "position", "role", "job", "correct", "fine", "good", "great", "perfect",
   "name", "full", "number", "phone", "email", "address", "date", "preferred", "please",
   "speaking", "here", "this", "that", "mister", "mr", "mrs", "ms", "sir", "madam", "actually",
-  "well", "just", "like", "want", "would", "myself", "from",
+  "well", "just", "like", "want", "would", "myself", "from", "im", "i'm",
 ]);
 
 function titleCase(s: string): string {
@@ -180,7 +180,9 @@ function extractNameFromTranscript(
     ) {
       for (let j = i + 1; j < transcript.length; j++) {
         if (transcript[j].role === "user") {
-          const txt = transcript[j].text.replace(STRONG, (_m, tail) => tail || "");
+          const txt = transcript[j].text
+            .replace(STRONG, (_m, tail) => tail || "")
+            .replace(WEAK, (_m, tail) => tail || "");
           const n = takeName(txt, false);
           if (n) candidates.push({ name: n, score: 85, idx: j });
           break;

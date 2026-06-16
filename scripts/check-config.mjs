@@ -83,6 +83,27 @@ console.log(
   `\nGoogle Calendar: ${calendarReady ? "✓ configured (real invites)" : "⚠ placeholder — using Teams fallback link"}`
 );
 
+// Supabase + Vercel IPv6 trap: the direct host db.<ref>.supabase.co is
+// IPv6-only and unreachable from Vercel's IPv4 serverless functions. Prod must
+// use the Supavisor pooler host (...pooler.supabase.com).
+console.log("\n=== Database host (Vercel compatibility) ===");
+const dbUrl = process.env.DATABASE_URL || "";
+if (/db\.[a-z0-9]+\.supabase\.co/i.test(dbUrl)) {
+  console.log(
+    "  ✗ DATABASE_URL uses the DIRECT host (db.<ref>.supabase.co) — IPv6-only,\n" +
+      "    UNREACHABLE from Vercel. Switch to the Supavisor pooler from Supabase\n" +
+      "    dashboard → Connect → 'Transaction pooler':\n" +
+      "      postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true\n" +
+      "    (and DIRECT_URL → 'Session pooler' on port 5432). Works locally via IPv6,\n" +
+      "    so this only bites in production."
+  );
+  warned++;
+} else if (/pooler\.supabase\.com/i.test(dbUrl)) {
+  console.log("  ✓ Using Supavisor pooler host (Vercel-compatible)");
+} else if (dbUrl) {
+  console.log("  ⚠ Non-Supabase or custom host — verify it's reachable from your deploy target");
+}
+
 // Live DB check
 console.log("\n=== Live database check ===");
 try {

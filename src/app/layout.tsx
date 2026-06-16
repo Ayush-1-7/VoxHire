@@ -1,26 +1,30 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
+const geistSans = localFont({
+  src: "./fonts/GeistVF.woff",
+  variable: "--font-geist-sans",
+  weight: "100 900",
+  display: "swap",
 });
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
+const geistMono = localFont({
+  src: "./fonts/GeistMonoVF.woff",
+  variable: "--font-geist-mono",
+  weight: "100 900",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Zensar Technologies — Virtual Recruitment Assistant",
+  title: "VoxHire — AI Voice Recruitment",
   description:
-    "Speak with Zensar Technologies' AI-powered recruitment assistant. Get answers about job opportunities, company culture, and schedule your interview — all through voice.",
+    "VoxHire is an AI voice assistant that screens candidates, books interviews, and automates recruiter follow-up — all through a single conversation.",
   openGraph: {
-    title: "Zensar Technologies — Virtual Recruitment Assistant",
+    title: "VoxHire — AI Voice Recruitment",
     description:
-      "AI-powered voice recruitment assistant for Zensar Technologies. Schedule interviews and learn about career opportunities.",
+      "AI voice screening that saves candidate details, books interviews, and emails confirmations automatically.",
     type: "website",
   },
 };
@@ -31,9 +35,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${outfit.variable} font-sans antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <Providers>{children}</Providers>
       </body>

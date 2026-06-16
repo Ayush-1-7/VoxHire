@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { LucideIcon } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, LucideIcon } from "lucide-react";
 
 interface StatCardProps {
   title: string;
@@ -9,7 +9,7 @@ interface StatCardProps {
   change?: string;
   changeType?: "positive" | "negative" | "neutral";
   icon: LucideIcon;
-  iconColor?: string;
+  hint?: string;
 }
 
 export function StatCard({
@@ -18,39 +18,39 @@ export function StatCard({
   change,
   changeType = "neutral",
   icon: Icon,
-  iconColor = "text-primary",
+  hint,
 }: StatCardProps) {
+  const TrendIcon = changeType === "negative" ? ArrowDownRight : ArrowUpRight;
+
   return (
-    <div className="glass rounded-xl p-5 glass-hover transition-all duration-300 group">
-      <div className="flex items-start justify-between mb-3">
-        <div
-          className={cn(
-            "w-10 h-10 rounded-lg flex items-center justify-center border transition-transform group-hover:scale-110",
-            iconColor === "text-primary" && "bg-primary/10 border-primary/20",
-            iconColor === "text-success" && "bg-success-bg border-success/20",
-            iconColor === "text-amber-400" && "bg-amber-500/10 border-amber-500/20",
-            iconColor === "text-violet-400" && "bg-violet-500/10 border-violet-500/20"
-          )}
-        >
-          <Icon className={cn("w-5 h-5", iconColor)} />
-        </div>
+    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-xs transition-all duration-200 hover:shadow-md hover:border-border/70">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">{title}</span>
+        <span className="flex size-8 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+          <Icon className="size-4" />
+        </span>
+      </div>
+
+      <div className="mt-3 flex items-end justify-between">
+        <span className="text-[1.75rem] font-semibold leading-none tracking-tight tabular-nums">
+          {value}
+        </span>
         {change && (
           <span
             className={cn(
-              "text-xs font-semibold px-2 py-0.5 rounded-full",
-              changeType === "positive" && "text-green-400 bg-green-500/10",
-              changeType === "negative" && "text-red-400 bg-red-500/10",
-              changeType === "neutral" && "text-muted-foreground bg-muted/50"
+              "mb-0.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums",
+              changeType === "positive" && "bg-success/10 text-success",
+              changeType === "negative" && "bg-destructive/10 text-destructive",
+              changeType === "neutral" && "bg-muted text-muted-foreground"
             )}
           >
+            {changeType !== "neutral" && <TrendIcon className="size-3" />}
             {change}
           </span>
         )}
       </div>
-      <p className="text-2xl font-heading font-bold gradient-text mb-1">
-        {value}
-      </p>
-      <p className="text-xs text-muted-foreground">{title}</p>
+
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

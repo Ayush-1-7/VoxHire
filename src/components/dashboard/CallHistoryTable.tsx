@@ -1,8 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { cn, formatDate, getStatusColor, formatStatusLabel } from "@/lib/utils";
-import { Phone, Clock, User } from "lucide-react";
+import { formatDate } from "@/lib/utils";
+import { Clock, Phone, Sparkles } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { InitialsAvatar } from "@/components/ui/avatar";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface Call {
   id: string;
@@ -15,163 +34,153 @@ interface Call {
   candidate?: { id: string; name: string; email: string | null } | null;
 }
 
-interface CallHistoryTableProps {
-  calls: Call[];
-  compact?: boolean;
+const STATUS_VARIANT: Record<string, BadgeProps["variant"]> = {
+  COMPLETED: "success",
+  IN_PROGRESS: "primary",
+  INITIATED: "secondary",
+  NO_ANSWER: "warning",
+  FAILED: "destructive",
+};
+
+function statusLabel(s: string) {
+  return s.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function CallHistoryTable({ calls, compact = false }: CallHistoryTableProps) {
-  const [selectedCall, setSelectedCall] = useState<Call | null>(null);
+function formatDuration(d: number | null) {
+  if (!d) return "—";
+  return `${Math.floor(d / 60)}m ${d % 60}s`;
+}
+
+export function CallHistoryTable({
+  calls,
+  compact = false,
+}: {
+  calls: Call[];
+  compact?: boolean;
+}) {
+  const [selected, setSelected] = useState<Call | null>(null);
 
   if (calls.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <Phone className="w-10 h-10 mb-3 opacity-30" />
-        <p className="text-sm">No call records yet</p>
-        <p className="text-xs mt-1">Calls will appear here after your first voice session</p>
-      </div>
+      <EmptyState
+        icon={Phone}
+        title="No calls yet"
+        description="Completed voice screenings will appear here with transcripts and extracted details."
+      />
     );
   }
 
   return (
-    <div className="relative">
-      <div className="overflow-x-auto animate-fade-in">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left">
-              <th className="pb-3 font-medium text-muted-foreground">Candidate</th>
-              <th className="pb-3 font-medium text-muted-foreground">Status</th>
-              <th className="pb-3 font-medium text-muted-foreground">Duration</th>
-              {!compact && (
-                <th className="pb-3 font-medium text-muted-foreground">Date</th>
-              )}
-              {!compact && (
-                <th className="pb-3 font-medium text-muted-foreground">Summary</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {calls.map((call) => (
-              <tr
-                key={call.id}
-                onClick={() => setSelectedCall(call)}
-                className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
-              >
-                <td className="py-3 pr-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                      <User className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                    <span className="font-medium text-foreground">
-                      {call.candidate?.name || "Unknown"}
-                    </span>
-                  </div>
-                </td>
-                <td className="py-3 pr-4">
-                  <span
-                    className={cn(
-                      "inline-flex items-center px-2 py-0.5 rounded-full text-[0.7rem] font-semibold border",
-                      getStatusColor(call.status)
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Candidate</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Duration</TableHead>
+            {!compact && <TableHead>Date</TableHead>}
+            {!compact && <TableHead>Summary</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {calls.map((call) => (
+            <TableRow
+              key={call.id}
+              onClick={() => setSelected(call)}
+              className="cursor-pointer"
+            >
+              <TableCell>
+                <div className="flex items-center gap-2.5">
+                  <InitialsAvatar name={call.candidate?.name} className="size-7" />
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{call.candidate?.name || "Unknown"}</div>
+                    {call.candidate?.email && (
+                      <div className="truncate text-xs text-muted-foreground">{call.candidate.email}</div>
                     )}
-                  >
-                    {formatStatusLabel(call.status)}
-                  </span>
-                </td>
-                <td className="py-3 pr-4 text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {call.duration
-                      ? `${Math.floor(call.duration / 60)}m ${call.duration % 60}s`
-                      : "—"}
                   </div>
-                </td>
-                {!compact && (
-                  <td className="py-3 pr-4 text-muted-foreground">
-                    {formatDate(call.startedAt)}
-                  </td>
-                )}
-                {!compact && (
-                  <td className="py-3 text-muted-foreground max-w-[200px] truncate">
-                    {call.summary || "—"}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Transcript Detail Modal */}
-      {selectedCall && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="glass w-full max-w-2xl rounded-2xl flex flex-col max-h-[85vh] shadow-glow border border-border">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-border">
-              <div>
-                <h3 className="font-heading font-bold text-lg text-foreground">
-                  Call Record Transcript
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Candidate: {selectedCall.candidate?.name || "Unknown"} ({selectedCall.candidate?.email || "No Email"})
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedCall(null)}
-                className="w-8 h-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors cursor-pointer text-muted-foreground hover:text-foreground text-xs"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm scrollbar-thin">
-              {/* Summary */}
-              {selectedCall.summary && (
-                <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl">
-                  <p className="text-xs font-semibold text-primary mb-1">AI Call Summary</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {selectedCall.summary}
-                  </p>
                 </div>
+              </TableCell>
+              <TableCell>
+                <Badge variant={STATUS_VARIANT[call.status] ?? "secondary"} dot>
+                  {statusLabel(call.status)}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
+                  <Clock className="size-3.5" />
+                  {formatDuration(call.duration)}
+                </span>
+              </TableCell>
+              {!compact && (
+                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  {formatDate(call.startedAt)}
+                </TableCell>
               )}
+              {!compact && (
+                <TableCell className="max-w-[260px] truncate text-sm text-muted-foreground">
+                  {call.summary || "—"}
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
 
-              {/* Transcript thread */}
-              <div className="space-y-4">
-                <p className="text-[0.7rem] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Conversation Log
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Call transcript</DialogTitle>
+            <DialogDescription>
+              {selected?.candidate?.name || "Unknown"}
+              {selected?.candidate?.email ? ` · ${selected.candidate.email}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] space-y-5 overflow-y-auto pr-1 custom-scrollbar">
+            {selected?.summary && (
+              <div className="rounded-lg border border-primary/15 bg-primary/[0.04] p-3.5">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-primary">
+                  <Sparkles className="size-3.5" /> AI summary
                 </p>
-                {selectedCall.transcript && Array.isArray(selectedCall.transcript) && selectedCall.transcript.length > 0 ? (
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                    {selectedCall.transcript.map((entry, index) => {
-                      const isUser = entry.role === "user";
-                      return (
-                        <div
-                          key={index}
-                          className={cn(
-                            "flex flex-col max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed",
-                            isUser
-                              ? "bg-primary text-white ml-auto rounded-tr-none"
-                              : "bg-muted text-foreground mr-auto rounded-tl-none border border-border"
-                          )}
-                        >
-                          <span className={cn("text-[0.65rem] font-bold mb-1 opacity-70", isUser ? "text-indigo-100" : "text-primary")}>
-                            {isUser ? "Candidate" : "AI Recruiter"}
-                          </span>
-                          <p>{entry.text}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground text-center py-8">
-                    No transcript text available for this call.
-                  </p>
-                )}
+                <p className="text-sm leading-relaxed text-muted-foreground">{selected.summary}</p>
               </div>
+            )}
+
+            <div className="space-y-3">
+              {selected?.transcript && selected.transcript.length > 0 ? (
+                selected.transcript.map((entry, i) => {
+                  const isUser = entry.role === "user";
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+                        isUser
+                          ? "ml-auto rounded-br-sm bg-primary text-primary-foreground"
+                          : "mr-auto rounded-bl-sm border border-border bg-muted text-foreground"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "mb-1 block text-2xs font-medium uppercase tracking-wide",
+                          isUser ? "text-primary-foreground/70" : "text-muted-foreground"
+                        )}
+                      >
+                        {isUser ? "Candidate" : "AI Recruiter"}
+                      </span>
+                      {entry.text}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No transcript available for this call.
+                </p>
+              )}
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

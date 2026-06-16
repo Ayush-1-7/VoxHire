@@ -1,32 +1,39 @@
 import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
-const Badge = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & {
-    variant?: "default" | "secondary" | "destructive" | "outline" | "success";
+const badgeVariants = cva(
+  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap",
+  {
+    variants: {
+      variant: {
+        default: "border-transparent bg-muted text-foreground",
+        primary: "border-primary/20 bg-primary/10 text-primary",
+        secondary: "border-transparent bg-muted text-muted-foreground",
+        outline: "border-border text-foreground",
+        success: "border-success/20 bg-success/10 text-success",
+        warning: "border-warning/20 bg-warning/10 text-warning",
+        destructive: "border-destructive/20 bg-destructive/10 text-destructive",
+      },
+    },
+    defaultVariants: { variant: "default" },
   }
->(({ className, variant = "default", ...props }, ref) => {
-  const variants: Record<string, string> = {
-    default: "border-transparent bg-primary/10 text-primary",
-    secondary: "border-transparent bg-secondary/10 text-secondary",
-    destructive: "border-transparent bg-destructive/10 text-destructive",
-    outline: "border-border text-foreground",
-    success: "border-transparent bg-success-bg text-success",
-  };
+);
 
-  return (
-    <div
-      ref={ref}
-      className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
-        variants[variant],
-        className
-      )}
-      {...props}
-    />
-  );
-});
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {
+  dot?: boolean;
+}
+
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant, dot, children, ...props }, ref) => (
+    <div ref={ref} className={cn(badgeVariants({ variant }), className)} {...props}>
+      {dot && <span className="size-1.5 rounded-full bg-current opacity-80" />}
+      {children}
+    </div>
+  )
+);
 Badge.displayName = "Badge";
 
-export { Badge };
+export { Badge, badgeVariants };

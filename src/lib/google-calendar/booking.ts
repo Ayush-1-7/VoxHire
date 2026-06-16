@@ -21,6 +21,19 @@ export async function bookCalendarEvent(params: BookingParams) {
     params;
   const endTime = addMinutes(scheduledAt, durationMinutes);
 
+  const formattedDate = scheduledAt.toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
+  const formattedTime = scheduledAt.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  });
+
   const attendees: Array<{ email: string; displayName: string }> = [];
 
   if (process.env.RESEND_FROM_EMAIL) {
@@ -44,7 +57,7 @@ export async function bookCalendarEvent(params: BookingParams) {
       sendUpdates: "all",
       requestBody: {
         summary: title,
-        description: `Technical Interview scheduled via Zensar AI Recruitment Bot\n\nCandidate Profile:\n- Name: ${candidateName}\n- Email: ${candidateEmail || "N/A"}\n- Role: ${jobRole || "Software Engineer"}\n- Experience: ${experience || "N/A"}\n\nJoin the Google Meet or Microsoft Teams link attached to this event invitation.`,
+        description: `Technical Interview scheduled via Zensar AI Recruitment Bot\n\nCandidate Profile:\n- Name: ${candidateName}\n- Email: ${candidateEmail || "N/A"}\n- Role: ${jobRole || "Software Engineer"}\n- Experience: ${experience || "N/A"}\n\nSchedule:\n- Date: ${formattedDate}\n- Time: ${formattedTime} (IST)\n- Duration: ${durationMinutes} minutes\n\nJoin the Google Meet or Microsoft Teams link attached to this event invitation.`,
         start: {
           dateTime: scheduledAt.toISOString(),
           timeZone: "Asia/Kolkata",

@@ -13,7 +13,10 @@ function extractEmailFromTurn(turnText: string): string | null {
   
   const wordToDigitMap: Record<string, string> = {
     zero: "0", one: "1", two: "2", three: "3", four: "4",
-    five: "5", six: "6", seven: "7", eight: "8", nine: "9", oh: "0"
+    five: "5", six: "6", seven: "7", eight: "8", nine: "9",
+    ten: "10", eleven: "11", twelve: "12", thirteen: "13",
+    fourteen: "14", fifteen: "15", sixteen: "16", seventeen: "17",
+    eighteen: "18", nineteen: "19", twenty: "20", oh: "0"
   };
   for (const [word, digit] of Object.entries(wordToDigitMap)) {
     const regex = new RegExp(`\\b${word}\\b`, "g");
@@ -31,26 +34,10 @@ function extractEmailFromTurn(turnText: string): string | null {
   const leftPart = parts.slice(0, -1).join("@").trim();
   const rightPart = parts[parts.length - 1].trim();
 
-  const leftWords = leftPart.split(/\s+/);
-  const usernameWords: string[] = [];
-  const allowedUsernameWords = new Set(["underscore", "dash", "hyphen", "dot", "period"]);
-  
-  for (let i = leftWords.length - 1; i >= 0; i--) {
-    const w = leftWords[i].replace(/[^a-z0-9]/g, "");
-    if (leftWords[i].length === 1 && /[a-z0-9]/i.test(leftWords[i])) {
-      usernameWords.unshift(leftWords[i]);
-    } else if (allowedUsernameWords.has(w)) {
-      const char = w === "underscore" ? "_" : (w === "dot" || w === "period" ? "." : "-");
-      usernameWords.unshift(char);
-    } else if (/^\d+$/.test(w)) {
-      usernameWords.unshift(w);
-    } else {
-      break;
-    }
-  }
+  const leftWords = normalizeEmailUsernameWords(leftPart);
 
-  if (usernameWords.length === 0) return null;
-  const username = usernameWords.join("");
+  if (leftWords.length === 0) return null;
+  const username = leftWords.join("");
 
   // Clean right part: remove spaces around dots and extract domain up to first valid TLD
   const cleanRight = rightPart.replace(/\s*\.\s*/g, ".");
@@ -67,6 +54,41 @@ function extractEmailFromTurn(turnText: string): string | null {
   const emailCandidate = `${username}@${domain}`;
   const finalMatch = emailCandidate.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   return finalMatch ? finalMatch[0] : null;
+}
+
+function normalizeEmailUsernameWords(leftPart: string): string[] {
+  const allowedUsernameWords = new Set(["underscore", "dash", "hyphen", "dot", "period"]);
+  const markerWords = new Set(["email", "address", "is", "mail", "called", "named"]);
+  const rawWords = leftPart
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-z0-9-]/gi, "").toLowerCase())
+    .filter(Boolean);
+
+  const lastMarkerIndex = rawWords.reduce((lastIndex, word, index) => {
+    return markerWords.has(word) ? index : lastIndex;
+  }, -1);
+
+  const words = lastMarkerIndex >= 0 && lastMarkerIndex < rawWords.length - 1
+    ? rawWords.slice(lastMarkerIndex + 1)
+    : rawWords;
+
+  const wordToDigitMap: Record<string, string> = {
+    zero: "0", one: "1", two: "2", three: "3", four: "4",
+    five: "5", six: "6", seven: "7", eight: "8", nine: "9",
+    ten: "10", eleven: "11", twelve: "12", thirteen: "13",
+    fourteen: "14", fifteen: "15", sixteen: "16", seventeen: "17",
+    eighteen: "18", nineteen: "19", twenty: "20", oh: "0"
+  };
+
+  return words.flatMap((word) => {
+    if (allowedUsernameWords.has(word)) {
+      return [word === "underscore" ? "_" : (word === "dot" || word === "period" ? "." : "-")];
+    }
+    if (wordToDigitMap[word]) return [wordToDigitMap[word]];
+    if (/^\d+$/.test(word)) return [word];
+    if (/^[a-z]$/.test(word)) return [word];
+    return [word];
+  });
 }
 
 /**

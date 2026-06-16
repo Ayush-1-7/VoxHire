@@ -4,6 +4,13 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
+/**
+ * Recruiter/owner address that is CC'd on every candidate email and used as the
+ * fallback recipient when Resend is in sandbox mode. Configurable via env so it
+ * isn't tied to one developer's inbox; defaults preserve existing behavior.
+ */
+const CC_EMAIL = (process.env.RESEND_CC_EMAIL || "ayush17v@gmail.com").toLowerCase();
+
 interface InterviewConfirmationParams {
   candidateName: string;
   candidateEmail: string;
@@ -152,8 +159,8 @@ export async function sendInterviewConfirmation(
     let data = null;
     let error: { statusCode?: number | null; message?: string; name?: string } | null = null;
 
-    const ccEmails = candidateEmail.toLowerCase() !== "ayush17v@gmail.com"
-      ? ["ayush17v@gmail.com"]
+    const ccEmails = candidateEmail.toLowerCase() !== CC_EMAIL
+      ? [CC_EMAIL]
       : undefined;
 
     try {
@@ -178,9 +185,9 @@ export async function sendInterviewConfirmation(
         (error.message &&
           error.message.toLowerCase().includes("you can only send testing emails"));
 
-      if (isSandboxError && candidateEmail.toLowerCase() !== "ayush17v@gmail.com") {
+      if (isSandboxError && candidateEmail.toLowerCase() !== CC_EMAIL) {
         console.warn(
-          `[Resend] Email to ${candidateEmail} blocked by Resend sandbox. Redirecting to ayush17v@gmail.com.`
+          `[Resend] Email to ${candidateEmail} blocked by Resend sandbox. Redirecting to ${CC_EMAIL}.`
         );
 
         const redirectedHtmlContent = htmlContent.replace(
@@ -193,7 +200,7 @@ export async function sendInterviewConfirmation(
 
         const retryRes = await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
-          to: ["ayush17v@gmail.com"],
+          to: [CC_EMAIL],
           subject: `[Sandbox Redirect] Interview Confirmation: ${roleDisplayName} - Zensar Technologies`,
           html: redirectedHtmlContent,
         });
@@ -204,7 +211,7 @@ export async function sendInterviewConfirmation(
         }
 
         console.log(
-          "[Resend] Sandbox redirected email sent to ayush17v@gmail.com:",
+          `[Resend] Sandbox redirected email sent to ${CC_EMAIL}:`,
           retryRes.data?.id
         );
         return retryRes.data;
@@ -219,5 +226,146 @@ export async function sendInterviewConfirmation(
   } catch (err) {
     console.error("[Resend] Failed to send email:", err);
     throw err;
+  }
+}
+
+interface CandidateAcknowledgementParams {
+  candidateName: string;
+  candidateEmail: string;
+  jobRole?: string;
+  experience?: string;
+  phone?: string | null;
+}
+
+export async function sendCandidateAcknowledgement(
+  params: CandidateAcknowledgementParams
+) {
+  if (!resend) {
+    console.warn("[Resend] Email client not configured — skipping acknowledgement email");
+    return null;
+  }
+
+  const { candidateName, candidateEmail, jobRole, experience, phone } = params;
+  const roleDisplayName = jobRole || "the discussed role";
+  const experienceText = experience ? `${experience} of experience` : "the profile details shared during the call";
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Thank You - Zensar Technologies</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; padding: 32px 16px;">
+        <tr>
+          <td align="center">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+              <tr>
+                <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 40px 32px; text-align: center;">
+                  <div style="font-size: 13px; font-weight: 700; color: #e0e7ff; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">Zensar Technologies</div>
+                  <h1 style="font-size: 26px; font-weight: 800; color: #ffffff; margin: 0;">Thank You for Speaking With Us</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 32px;">
+                  <p style="font-size: 16px; line-height: 24px; color: #1e293b; margin: 0 0 16px 0;">Dear <strong>${candidateName}</strong>,</p>
+                  <p style="font-size: 15px; line-height: 24px; color: #475569; margin: 0 0 24px 0;">
+                    Thank you for completing the AI voice screening for <strong>${roleDisplayName}</strong>.
+                    We have received your details and your profile has been recorded in our recruitment system.
+                  </p>
+                  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; border-radius: 12px; padding: 20px; margin-bottom: 28px;">
+                    <tr>
+                      <td style="padding-bottom: 10px; font-size: 14px; color: #64748b;">
+                        <strong style="color: #475569; display: block; margin-bottom: 2px;">ROLE</strong>
+                        <span style="font-size: 15px; font-weight: 600; color: #0f172a;">${roleDisplayName}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding-bottom: 10px; font-size: 14px; color: #64748b;">
+                        <strong style="color: #475569; display: block; margin-bottom: 2px;">EXPERIENCE</strong>
+                        <span style="font-size: 15px; font-weight: 600; color: #0f172a;">${experienceText}</span>
+                      </td>
+                    </tr>
+                    ${phone ? `<tr><td style="font-size: 14px; color: #64748b;"><strong style="color: #475569; display: block; margin-bottom: 2px;">PHONE</strong><span style="font-size: 15px; font-weight: 600; color: #0f172a;">${phone}</span></td></tr>` : ""}
+                  </table>
+                  <p style="font-size: 15px; line-height: 24px; color: #475569; margin: 0 0 24px 0;">
+                    Our recruitment team will review the information and contact you with the next steps.
+                  </p>
+                  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
+                  <p style="font-size: 13px; line-height: 20px; color: #64748b; margin: 0;">
+                    Best regards,<br />
+                    <strong>Zensar Technologies Recruitment Team</strong>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="background-color: #f8fafc; padding: 24px 32px; text-align: center; border-top: 1px solid #f1f5f9;">
+                  <p style="font-size: 11px; color: #94a3b8; margin: 0;">
+                    This is an automated notification from Zensar Recruitment Portal.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const ccEmails = candidateEmail.toLowerCase() !== CC_EMAIL
+    ? [CC_EMAIL]
+    : undefined;
+
+  try {
+    const res = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+      to: [candidateEmail],
+      cc: ccEmails,
+      subject: `Thank You - Voice Screening - Zensar Technologies`,
+      html: htmlContent,
+    });
+
+    if (res.error) {
+      throw res.error;
+    }
+
+    console.log("[Resend] Acknowledgement email sent to", candidateEmail, ":", res.data?.id);
+    return res.data;
+  } catch (err) {
+    const error = err as { statusCode?: number | null; message?: string };
+    const isSandboxError =
+      error.statusCode === 403 ||
+      (error.message && error.message.toLowerCase().includes("you can only send testing emails"));
+
+    if (isSandboxError && candidateEmail.toLowerCase() !== CC_EMAIL) {
+      const redirectedHtmlContent = htmlContent.replace(
+        `<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">`,
+        `<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <div style="background-color: #fffbeb; border-bottom: 1px solid #fde68a; color: #b45309; padding: 12px; font-size: 13px; text-align: center; font-weight: 500; font-family: sans-serif;">
+          Resend Sandbox Mode: This acknowledgement email was originally sent to ${candidateEmail} but was redirected to you.
+        </div>`
+      );
+
+      const retryRes = await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+        to: [CC_EMAIL],
+        subject: `[Sandbox Redirect] Thank You - Voice Screening - Zensar Technologies`,
+        html: redirectedHtmlContent,
+      });
+
+      if (retryRes.error) {
+        console.error("[Resend] Redirect retry failed:", retryRes.error);
+        throw retryRes.error;
+      }
+
+      console.log(`[Resend] Sandbox redirected acknowledgement email sent to ${CC_EMAIL}:`, retryRes.data?.id);
+      return retryRes.data;
+    }
+
+    console.error("[Resend] Failed to send acknowledgement email:", error);
+    throw error;
   }
 }

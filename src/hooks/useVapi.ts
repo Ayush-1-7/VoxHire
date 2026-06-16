@@ -28,6 +28,7 @@ export function useVapi() {
   const callStartTime = useRef<Date | null>(null);
   const transcriptRef = useRef<TranscriptEntry[]>([]);
   const currentCallIdRef = useRef<string | null>(null);
+  const saveCallInFlightRef = useRef(false);
   const { setActiveCall, clearActiveCall } = useCallStore();
 
   useEffect(() => {
@@ -37,45 +38,55 @@ export function useVapi() {
       callStartTime.current = new Date();
       transcriptRef.current = [];
       currentCallIdRef.current = null;
+      saveCallInFlightRef.current = false;
     };
 
     const handleCallEnd = async () => {
+      if (saveCallInFlightRef.current) return;
+      saveCallInFlightRef.current = true;
+
       setCallStatus("ended");
       setIsSpeaking(false);
       setVolumeLevel(0);
       clearActiveCall();
 
+      const endedAt = new Date();
       const duration = callStartTime.current
-        ? Math.round((new Date().getTime() - callStartTime.current.getTime()) / 1000)
+        ? Math.round((endedAt.getTime() - callStartTime.current.getTime()) / 1000)
         : 0;
 
       const vapiCallId = currentCallIdRef.current;
       const transcriptData = transcriptRef.current;
+      const startedAt = callStartTime.current?.toISOString() || null;
 
-      if (transcriptData.length > 0) {
-        try {
-          console.log("[useVapi] Saving call ending transcript:", transcriptData);
-          const response = await fetch("/api/vapi/save-call", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              vapiCallId,
-              transcript: transcriptData,
-              duration,
-            }),
-          });
-          if (!response.ok) {
-            console.error("[useVapi] Failed to save call:", await response.text());
-          } else {
-            console.log("[useVapi] Call saved successfully:", await response.json());
-          }
-        } catch (err) {
-          console.error("[useVapi] Error saving call:", err);
+      try {
+        console.log("[useVapi] Saving call ending data:", {
+          vapiCallId,
+          transcriptCount: transcriptData.length,
+          duration,
+        });
+        const response = await fetch("/api/vapi/save-call", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            vapiCallId,
+            transcript: transcriptData,
+            duration,
+            startedAt,
+            endedAt: endedAt.toISOString(),
+          }),
+        });
+        if (!response.ok) {
+          console.error("[useVapi] Failed to save call:", await response.text());
+        } else {
+          console.log("[useVapi] Call saved successfully:", await response.json());
         }
-      } else {
-        console.log("[useVapi] No transcript to save");
+      } catch (err) {
+        console.error("[useVapi] Error saving call:", err);
+      } finally {
+        saveCallInFlightRef.current = false;
       }
     };
 
@@ -144,6 +155,8 @@ export function useVapi() {
     setTranscript([]);
     transcriptRef.current = [];
     currentCallIdRef.current = null;
+    saveCallInFlightRef.current = false;
+    callStartTime.current = new Date();
     setError(null);
 
     try {
@@ -175,6 +188,7 @@ export function useVapi() {
     setTranscript([]);
     transcriptRef.current = [];
     currentCallIdRef.current = null;
+    saveCallInFlightRef.current = false;
     setError(null);
     setCurrentCallId(null);
   }, []);

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { db } from "@/lib/db";
-import { extractCandidateData } from "@/lib/vapi/extract-data";
-import { sendInterviewConfirmation } from "@/lib/email/resend-client";
-import { bookCalendarEvent } from "@/lib/google-calendar/booking";
+import { parseDate, processCompletedCall } from "@/lib/vapi/process-call";
 
+/**
+ * VAPI server-side webhook (production path).
+ * The heavy "end-of-call-report" work is shared with the client save-call
+ * endpoint via processCompletedCall(), which is idempotent on vapiCallId — so
+ * even if both fire for the same call, the candidate is saved/emailed once.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
@@ -38,10 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
     console.error("[Webhook] Error:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
@@ -52,7 +53,7 @@ async function handleCallStarted(message: { call: { id: string; startedAt?: stri
     create: {
       vapiCallId: call.id,
       status: "IN_PROGRESS",
-      startedAt: new Date(call.startedAt || Date.now()),
+      startedAt: parseDate(call.startedAt, new Date()),
     },
     update: { status: "IN_PROGRESS" },
   });
@@ -60,174 +61,39 @@ async function handleCallStarted(message: { call: { id: string; startedAt?: stri
 
 async function handleCallEnded(message: { call: { id: string; duration?: number } }) {
   const { call } = message;
-  await db.call.update({
+  await db.call.upsert({
     where: { vapiCallId: call.id },
-    data: {
+    create: {
+      vapiCallId: call.id,
       status: "COMPLETED",
+      duration: typeof call.duration === "number" ? call.duration : null,
       endedAt: new Date(),
-      duration: call.duration,
+    },
+    update: {
+      status: "COMPLETED",
+      duration: typeof call.duration === "number" ? call.duration : null,
+      endedAt: new Date(),
     },
   });
 }
 
 async function handleEndOfCallReport(message: {
-  call: { id: string; duration?: number };
+  call: { id: string; duration?: number; startedAt?: string; endedAt?: string };
   transcript?: Array<{ role: string; text: string }>;
   summary?: string;
   analysis?: { structuredData?: Record<string, unknown> };
 }) {
   const { call, transcript, summary, analysis } = message;
 
-  const candidateData = await extractCandidateData(transcript || [], analysis);
-
-  let candidate = null;
-
-  if (candidateData.email) {
-    candidate = await db.candidate.upsert({
-      where: { email: candidateData.email },
-      create: {
-        name: candidateData.name || "Unknown",
-        email: candidateData.email,
-        phone: candidateData.phone,
-        jobRole: candidateData.jobRole,
-        experience: candidateData.experience,
-        status: "SCREENING",
-        notes: candidateData.notes,
-        source: "voice-bot",
-        consentGiven: true,
-      },
-      update: {
-        name: candidateData.name || undefined,
-        phone: candidateData.phone || undefined,
-        jobRole: candidateData.jobRole || undefined,
-        updatedAt: new Date(),
-      },
-    });
-  } else if (candidateData.name) {
-    candidate = await db.candidate.create({
-      data: {
-        name: candidateData.name,
-        phone: candidateData.phone,
-        status: "CONTACTED",
-        source: "voice-bot",
-      },
-    });
-  }
-
-  await db.call.update({
-    where: { vapiCallId: call.id },
-    data: {
-      candidateId: candidate?.id,
-      status: "COMPLETED",
-      transcript: transcript as unknown as undefined,
-      summary: summary,
-      extractedData: candidateData as unknown as undefined,
-      duration: call.duration,
-      endedAt: new Date(),
-    },
-  });
-
-  // Schedule interview if date provided and candidate email exists
-  if (
-    candidateData.preferredInterviewDate &&
-    candidate &&
-    candidate.email
-  ) {
-    await scheduleInterview({
-      candidate: {
-        id: candidate.id,
-        name: candidate.name || "Candidate",
-        email: candidate.email,
-        jobRole: candidate.jobRole || undefined,
-        experience: candidate.experience || undefined,
-      },
-      scheduledAt: new Date(candidateData.preferredInterviewDate),
-    });
-  }
-
-  // Update daily analytics
-  await updateDailyAnalytics();
-}
-
-async function scheduleInterview({
-  candidate,
-  scheduledAt,
-}: {
-  candidate: { id: string; name: string; email: string | null; jobRole?: string; experience?: string };
-  scheduledAt: Date;
-}) {
-  try {
-    let calendarEvent = null;
-    const mockMeetLink = `https://teams.live.com/meet/${Math.random().toString(36).substring(2, 12)}`;
-
-    try {
-      calendarEvent = await bookCalendarEvent({
-        title: `Technical Interview: ${candidate.jobRole || "Software Engineer"} - ${candidate.name} | Zensar Technologies`,
-        scheduledAt,
-        durationMinutes: 60,
-        candidateName: candidate.name,
-        candidateEmail: candidate.email || undefined,
-        jobRole: candidate.jobRole,
-        experience: candidate.experience,
-      });
-    } catch (calErr) {
-      console.error("[Webhook] Google Calendar booking failed, proceeding with local booking:", calErr);
-    }
-
-    const meetLink = calendarEvent?.hangoutLink || mockMeetLink;
-
-    const appointment = await db.appointment.create({
-      data: {
-        candidateId: candidate.id,
-        googleEventId: calendarEvent?.id || null,
-        googleMeetLink: meetLink,
-        scheduledAt,
-        durationMinutes: 60,
-        status: "SCHEDULED",
-      },
-    });
-
-    await db.candidate.update({
-      where: { id: candidate.id },
-      data: { status: "INTERVIEW_SCHEDULED" },
-    });
-
-    if (candidate.email) {
-      await sendInterviewConfirmation({
-        candidateName: candidate.name,
-        candidateEmail: candidate.email,
-        scheduledAt,
-        meetLink,
-        jobRole: candidate.jobRole,
-        experience: candidate.experience,
-      });
-
-      await db.appointment.update({
-        where: { id: appointment.id },
-        data: { confirmationSent: true },
-      });
-    }
-  } catch (err) {
-    console.error("[Webhook] Failed to schedule interview:", err);
-  }
-}
-
-async function updateDailyAnalytics() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const [callCount, newCandidates, scheduledInterviews] = await Promise.all([
-    db.call.count({ where: { startedAt: { gte: today } } }),
-    db.candidate.count({ where: { createdAt: { gte: today } } }),
-    db.appointment.count({
-      where: { createdAt: { gte: today }, status: "SCHEDULED" },
-    }),
-  ]);
-
-  await db.analytics.upsert({
-    where: { date: today },
-    create: { date: today, callCount, newCandidates, scheduledInterviews },
-    update: { callCount, newCandidates, scheduledInterviews },
+  return processCompletedCall({
+    vapiCallId: call.id,
+    transcript,
+    duration: call.duration,
+    startedAt: call.startedAt,
+    endedAt: call.endedAt,
+    summary,
+    analysis,
+    source: "webhook",
   });
 }
 

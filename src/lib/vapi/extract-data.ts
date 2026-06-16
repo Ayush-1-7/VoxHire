@@ -91,6 +91,144 @@ function normalizeEmailUsernameWords(leftPart: string): string[] {
   });
 }
 
+const NAME_STOPWORDS = new Set([
+  "i", "my", "me", "he", "she", "we", "they", "you", "your", "his", "her", "the", "a", "an",
+  "and", "but", "or", "for", "of", "in", "on", "at", "to", "is", "am", "are", "be", "it",
+  "yes", "no", "hello", "hi", "hey", "thanks", "thank", "so", "sure", "okay", "ok", "um", "uh",
+  "looking", "applying", "apply", "applied", "calling", "called", "interested", "regarding",
+  "application", "position", "role", "job", "correct", "fine", "good", "great", "perfect",
+  "name", "full", "number", "phone", "email", "address", "date", "preferred", "please",
+  "speaking", "here", "this", "that", "mister", "mr", "mrs", "ms", "sir", "madam", "actually",
+  "well", "just", "like", "want", "would", "myself", "from",
+]);
+
+function titleCase(s: string): string {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/**
+ * Robustly extract the candidate's name from a noisy STT transcript.
+ *
+ * Strategy: prefer explicit self-introductions ("my (full) name is X"), take
+ * the leading run of capitalized, non-stopword tokens, and choose the
+ * highest-confidence / earliest candidate. This avoids grabbing stray phrases
+ * like "looking for" out of "I am looking for ...".
+ */
+function extractNameFromTranscript(
+  transcript: Array<{ role: string; text: string }>
+): string | null {
+  // Strong intros (clear name markers) allow a lowercase fallback token.
+  const STRONG = /\b(?:my full name is|my name is|name's|you can call me|call me|i am called|name is)\b(.*)/i;
+  // Weak intros ("I am", "this is") only accept Capitalized tokens, since they
+  // also appear in non-name phrases ("I am looking for...").
+  const WEAK = /\b(?:i am|i'm|this is)\b(.*)/i;
+
+  const takeName = (tail: string, allowLower: boolean): string => {
+    const toks = (tail || "")
+      .trim()
+      .split(/\s+/)
+      .map((t) => t.replace(/[^a-zA-Z']/g, ""))
+      .filter(Boolean);
+    let i = 0;
+    while (i < toks.length && NAME_STOPWORDS.has(toks[i].toLowerCase())) i++;
+    const run: string[] = [];
+    for (let k = i; k < toks.length; k++) {
+      const w = toks[k];
+      if (/^[A-Z][a-zA-Z']+$/.test(w) && !NAME_STOPWORDS.has(w.toLowerCase())) {
+        run.push(w);
+        if (run.length === 3) break;
+      } else break;
+    }
+    if (run.length) return run.join(" ");
+    if (allowLower && i < toks.length) {
+      const w = toks[i];
+      if (/^[a-zA-Z']{2,}$/.test(w) && !NAME_STOPWORDS.has(w.toLowerCase())) return w;
+    }
+    return "";
+  };
+
+  const candidates: Array<{ name: string; score: number; idx: number }> = [];
+
+  transcript.forEach((entry, idx) => {
+    if (entry.role !== "user") return;
+    const strong = entry.text.match(STRONG);
+    if (strong) {
+      const n = takeName(strong[1], true);
+      if (n) candidates.push({ name: n, score: 100, idx });
+      return;
+    }
+    const weak = entry.text.match(WEAK);
+    if (weak) {
+      const n = takeName(weak[1], false);
+      if (n) candidates.push({ name: n, score: 70, idx });
+    }
+  });
+
+  // The user turn right after an explicit "your name" question.
+  for (let i = 0; i < transcript.length; i++) {
+    if (transcript[i].role !== "assistant") continue;
+    const lt = transcript[i].text.toLowerCase();
+    if (
+      lt.includes("your name") ||
+      lt.includes("your full name") ||
+      lt.includes("who am i speaking") ||
+      lt.includes("may i know")
+    ) {
+      for (let j = i + 1; j < transcript.length; j++) {
+        if (transcript[j].role === "user") {
+          const txt = transcript[j].text.replace(STRONG, (_m, tail) => tail || "");
+          const n = takeName(txt, false);
+          if (n) candidates.push({ name: n, score: 85, idx: j });
+          break;
+        }
+      }
+    }
+  }
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.score - a.score || a.idx - b.idx);
+  return titleCase(candidates[0].name);
+}
+
+/**
+ * Extract a job role from the transcript: first an explicit statement
+ * ("the job role is X", "applying for X"), then a broad known-role keyword list.
+ */
+function extractJobRole(text: string): string | null {
+  const explicit = text.match(
+    /(?:job role is|the role is|role is|position is|designation is|profile is|applying for(?:\s+(?:the|a|an))?|apply for(?:\s+(?:the|a|an))?|interested in(?:\s+(?:the|a|an))?)\s+([a-zA-Z][a-zA-Z]+(?:[\s/][a-zA-Z]+){0,2})/i
+  );
+  if (explicit) {
+    const cleaned = explicit[1]
+      .replace(/\b(role|position|profile|job|only|please|now|opportunity|opportunities)\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (cleaned.length >= 2) return titleCase(cleaned);
+  }
+
+  const ROLES = [
+    "machine learning engineer", "full stack developer", "software development engineer",
+    "site reliability engineer", "business intelligence analyst", "solutions architect",
+    "cloud architect", "data scientist", "data engineer", "data analyst", "business analyst",
+    "devops engineer", "cloud engineer", "security engineer", "network engineer",
+    "qa engineer", "test engineer", "frontend developer", "backend developer",
+    "full stack", "software engineer", "software developer", "web developer",
+    "mobile developer", "android developer", "ios developer", "product manager",
+    "project manager", "program manager", "scrum master", "system administrator",
+    "ui/ux designer", "ux designer", "ui designer", "sre", "devops",
+    "developer", "designer", "architect", "consultant", "analyst", "engineer", "manager",
+  ];
+  const lower = text.toLowerCase();
+  for (const r of ROLES) {
+    if (lower.includes(r)) return titleCase(r);
+  }
+  return null;
+}
+
 /**
  * Extract structured candidate data from VAPI transcript and analysis.
  * First tries VAPI's built-in structured extraction, then falls back
@@ -173,111 +311,12 @@ export async function extractCandidateData(
   }
 
   if (!name) {
-    const extractedNames: string[] = [];
-
-    // 1. Scan assistant acknowledgements for names
-    for (const entry of transcript) {
-      if (entry.role === "assistant") {
-        const ackMatch = entry.text.match(/\b(?:thank you|thanks|hi|hello|perfect|great),\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/);
-        if (ackMatch) {
-          extractedNames.push(ackMatch[1]);
-        }
-      }
-    }
-
-    // 2. Scan user turns for name introductions
-    for (const entry of transcript) {
-      if (entry.role === "user") {
-        const introMatch = entry.text.match(/(?:my name is|i am|this is|i'm|call me)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)/i);
-        if (introMatch) {
-          extractedNames.push(introMatch[1]);
-        }
-      }
-    }
-
-    // 3. Scan user response right after assistant asks for name
-    for (let i = 0; i < transcript.length; i++) {
-      const text = transcript[i].text.toLowerCase();
-      if (
-        transcript[i].role === "assistant" &&
-        (text.includes("your full name") || text.includes("your name") || text.includes("who am i speaking with"))
-      ) {
-        for (let j = i + 1; j < transcript.length; j++) {
-          if (transcript[j].role === "user") {
-            const userText = transcript[j].text.trim();
-            const globalCapRegex = /\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\b/g;
-            let match;
-            while ((match = globalCapRegex.exec(userText)) !== null) {
-              extractedNames.push(match[1]);
-            }
-            // Fallback
-            const words = userText.split(/\s+/);
-            if (words.length <= 3 && !userText.toLowerCase().includes("no") && !userText.toLowerCase().includes("yes")) {
-              extractedNames.push(userText);
-            }
-            break;
-          }
-        }
-      }
-    }
-
-    // 4. Scan all user lines for capitalized words that look like names (e.g. 2 capitalized words in a row)
-    const twoCapMatch = userLines.match(/\b([A-Z][a-zA-Z]+\s+[A-Z][a-zA-Z]+)\b/g);
-    if (twoCapMatch) {
-      for (const m of twoCapMatch) {
-        extractedNames.push(m);
-      }
-    }
-
-    // 5. Filter and select the best candidate name
-    const ignoredWords = new Set([
-      "I", "My", "He", "She", "We", "They", "You", "His", "Her", "The", "Yes", "No", "Hello", "Hi", "Thank", "Thanks", "So"
-    ]);
-    const validNames = extractedNames
-      .map(n => n.trim())
-      .filter(n => {
-        const firstWord = n.split(/\s+/)[0];
-        return !ignoredWords.has(firstWord);
-      });
-
-    if (validNames.length > 0) {
-      validNames.sort((a, b) => b.length - a.length);
-      let bestName = validNames[0];
-
-      // Clean up common STT errors (like "I use" -> "Ayush")
-      if (bestName.toLowerCase() === "i use sharma" || bestName.toLowerCase() === "use sharma") {
-        bestName = "Ayush Sharma";
-      } else if (bestName.toLowerCase() === "i use") {
-        bestName = "Ayush";
-      }
-
-      name = bestName;
-    }
-
-    // Double check if name regex matched originally
-    if (!name) {
-      const nameMatch = userLines.match(
-        /(?:my name is|I(?:'m| am))\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/i
-      );
-      name = nameMatch?.[1] || null;
-    }
+    name = extractNameFromTranscript(transcript);
   }
 
   // Try to parse other details if missing
   if (!jobRole) {
-    const rolePatterns = [
-      /\b(?:software engineer|data analyst|developer|designer|devops|qa|architect|manager|consultant|frontend|backend|full\s*stack|analyst)\b/i
-    ];
-    for (const pattern of rolePatterns) {
-      const match = userLines.match(pattern);
-      if (match) {
-        jobRole = match[0]
-          .split(/\s+/)
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-          .join(" ");
-        break;
-      }
-    }
+    jobRole = extractJobRole(userLines);
   }
 
   if (!experience) {

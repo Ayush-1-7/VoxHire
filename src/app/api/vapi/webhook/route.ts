@@ -12,10 +12,9 @@ import { parseDate, processCompletedCall } from "@/lib/vapi/process-call";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
-    const signature = req.headers.get("x-vapi-signature");
 
-    if (!verifyWebhookSignature(body, signature)) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    if (!verifyVapiAuth(body, req.headers.get("x-vapi-secret"), req.headers.get("x-vapi-signature"))) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const payload = JSON.parse(body);
@@ -97,18 +96,39 @@ async function handleEndOfCallReport(message: {
   });
 }
 
-function verifyWebhookSignature(body: string, signature: string | null): boolean {
+/** Constant-time string equality that tolerates differing lengths. */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
+/**
+ * Verify a VAPI server message. VAPI's standard scheme is a plain shared secret
+ * sent in the `x-vapi-secret` header (compared for equality). We also accept an
+ * HMAC-SHA256 of the body in `x-vapi-signature` as a fallback. Verification is
+ * skipped only in development.
+ */
+function verifyVapiAuth(
+  body: string,
+  secretHeader: string | null,
+  signatureHeader: string | null
+): boolean {
   if (process.env.NODE_ENV === "development") return true;
-  if (!signature || !process.env.VAPI_WEBHOOK_SECRET) return false;
-  const expectedSig = crypto
-    .createHmac("sha256", process.env.VAPI_WEBHOOK_SECRET)
-    .update(body)
-    .digest("hex");
 
-  if (signature.length !== expectedSig.length) return false;
+  const secret = process.env.VAPI_WEBHOOK_SECRET;
+  // Treat unset/placeholder secrets as misconfiguration → reject in production.
+  if (!secret || /placeholder|your_/i.test(secret)) return false;
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSig)
-  );
+  // Primary: plain shared secret header (VAPI default).
+  if (secretHeader && safeEqual(secretHeader, secret)) return true;
+
+  // Fallback: HMAC-SHA256 of the raw body, hex-encoded.
+  if (signatureHeader) {
+    const expected = crypto.createHmac("sha256", secret).update(body).digest("hex");
+    if (safeEqual(signatureHeader, expected)) return true;
+  }
+
+  return false;
 }

@@ -1,107 +1,113 @@
 "use client";
 
-import { Globe, Bot, Bell } from "lucide-react";
+import { useState } from "react";
+import { Bot, Bell, Plug, Check, Copy } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/ui/page-header";
+import { toast } from "@/components/ui/toaster";
+
+const NOTIFICATIONS = [
+  { label: "New candidate notifications", desc: "When a new candidate is captured from a call", defaultOn: true },
+  { label: "Interview reminders", desc: "24 hours before a scheduled interview", defaultOn: true },
+  { label: "Daily summary email", desc: "A daily digest of recruitment activity", defaultOn: false },
+];
+
+const INTEGRATIONS = [
+  { name: "VAPI Voice AI", connected: true },
+  { name: "Supabase Database", connected: true },
+  { name: "Resend Email", connected: true },
+  { name: "Upstash Redis", connected: true },
+  { name: "Google Calendar", connected: false },
+  { name: "Sentry Monitoring", connected: false },
+];
+
+function CopyField({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    toast.success("Copied to clipboard");
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium">{label}</label>
+      <div className="flex gap-2">
+        <Input value={value} readOnly className="font-mono text-xs" />
+        <Button variant="outline" size="icon" onClick={copy} aria-label={`Copy ${label}`}>
+          {copied ? <Check className="size-4 text-success" /> : <Copy className="size-4" />}
+        </Button>
+      </div>
+      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">
-          <span className="gradient-text">Settings</span>
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure your AI recruitment bot and integrations
-        </p>
-      </div>
+    <div className="max-w-3xl space-y-6">
+      <PageHeader title="Settings" description="Configure the voice assistant and integrations." />
 
-      {/* VAPI Config */}
-      <div className="glass rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <Bot className="w-4 h-4 text-primary" />
-          <h3 className="font-heading font-semibold">Voice Bot Configuration</h3>
-        </div>
-        <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex-row items-center gap-2 space-y-0">
+          <Bot className="size-4 text-primary" />
           <div>
-            <label className="text-sm text-muted-foreground block mb-1.5">VAPI Assistant ID</label>
-            <Input
-              value={process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID || ""}
-              readOnly
-              className="bg-muted/30 font-mono text-xs"
-            />
+            <CardTitle>Voice bot configuration</CardTitle>
+            <CardDescription>Connect VAPI to this deployment.</CardDescription>
           </div>
-          <div>
-            <label className="text-sm text-muted-foreground block mb-1.5">Webhook URL</label>
-            <Input
-              value={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/vapi/webhook`}
-              readOnly
-              className="bg-muted/30 font-mono text-xs"
-            />
-            <p className="text-[0.7rem] text-muted-foreground/60 mt-1">
-              Set this URL in your VAPI dashboard under Assistant → Server URL
-            </p>
-          </div>
-        </div>
-      </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <CopyField label="VAPI Assistant ID" value={process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID || "Not configured"} />
+          <CopyField
+            label="Webhook URL"
+            value={`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/vapi/webhook`}
+            hint="Set this in the VAPI dashboard under Assistant → Server URL."
+          />
+        </CardContent>
+      </Card>
 
-      {/* Notifications */}
-      <div className="glass rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <Bell className="w-4 h-4 text-amber-400" />
-          <h3 className="font-heading font-semibold">Notifications</h3>
-        </div>
-        <div className="space-y-3">
-          {[
-            { label: "New candidate notifications", desc: "Get notified when a new candidate is captured" },
-            { label: "Interview reminders", desc: "Receive reminders before scheduled interviews" },
-            { label: "Daily summary email", desc: "Get a daily summary of recruitment activity" },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
-              <div>
-                <p className="text-sm font-medium text-foreground">{item.label}</p>
-                <p className="text-[0.7rem] text-muted-foreground">{item.desc}</p>
-              </div>
-              <div className="w-10 h-6 rounded-full bg-primary/20 relative cursor-pointer">
-                <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-primary transition-transform" />
+      <Card>
+        <CardHeader className="flex-row items-center gap-2 space-y-0">
+          <Bell className="size-4 text-primary" />
+          <CardTitle>Notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {NOTIFICATIONS.map((item, i) => (
+            <div key={item.label}>
+              {i > 0 && <Separator className="my-1" />}
+              <div className="flex items-center justify-between py-2.5">
+                <div className="pr-4">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+                <Switch defaultChecked={item.defaultOn} aria-label={item.label} />
               </div>
             </div>
           ))}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Integration Status */}
-      <div className="glass rounded-xl p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <Globe className="w-4 h-4 text-success" />
-          <h3 className="font-heading font-semibold">Integration Status</h3>
-        </div>
-        <div className="space-y-2">
-          {[
-            { name: "VAPI Voice AI", status: true },
-            { name: "Supabase Database", status: true },
-            { name: "Google Calendar", status: false },
-            { name: "Resend Email", status: true },
-            { name: "Upstash Redis", status: true },
-            { name: "Sentry Monitoring", status: false },
-          ].map((item) => (
-            <div
-              key={item.name}
-              className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/20 transition-colors"
-            >
-              <span className="text-sm text-foreground">{item.name}</span>
-              <span
-                className={`text-[0.7rem] font-semibold px-2 py-0.5 rounded-full ${
-                  item.status
-                    ? "text-green-400 bg-green-500/10"
-                    : "text-muted-foreground bg-muted/50"
-                }`}
-              >
-                {item.status ? "Connected" : "Not configured"}
-              </span>
+      <Card>
+        <CardHeader className="flex-row items-center gap-2 space-y-0">
+          <Plug className="size-4 text-primary" />
+          <CardTitle>Integrations</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {INTEGRATIONS.map((item) => (
+            <div key={item.name} className="flex items-center justify-between rounded-lg px-2 py-2.5 transition-colors hover:bg-accent/50">
+              <span className="text-sm">{item.name}</span>
+              <Badge variant={item.connected ? "success" : "secondary"} dot>
+                {item.connected ? "Connected" : "Not configured"}
+              </Badge>
             </div>
           ))}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

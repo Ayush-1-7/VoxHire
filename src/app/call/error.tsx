@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { AlertTriangle, RotateCw, Home } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function CallError({
   error,
@@ -12,32 +14,29 @@ export default function CallError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[CallPageErrorBoundary] Error caught:", error);
+    console.error("[CallPageErrorBoundary]", error);
   }, [error]);
 
   return (
-    <div className="flex items-center justify-center min-h-[400px] p-6">
-      <div className="glass max-w-md w-full p-8 text-center space-y-4 rounded-xl border border-destructive/20 shadow-lg">
-        <AlertTriangle className="w-12 h-12 text-destructive mx-auto" />
-        <h2 className="font-heading text-lg font-bold text-foreground">Voice Interface Error</h2>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          An error occurred while loading the voice calling assistant. Please verify your microphone connection and try again.
-        </p>
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <button
-            onClick={() => reset()}
-            className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary/95 transition-colors cursor-pointer border-none"
-          >
-            Try Again
-          </button>
-          <Link
-            href="/"
-            className="px-4 py-2 rounded-lg border border-border text-foreground hover:bg-muted text-xs font-semibold transition-colors"
-          >
-            Go Home
-          </Link>
-        </div>
-      </div>
+    <div className="mx-auto flex min-h-screen max-w-md items-center px-6">
+      <EmptyState
+        className="w-full"
+        icon={AlertTriangle}
+        title="Voice interface error"
+        description="We couldn't load the voice assistant. Check your microphone permissions and try again."
+        action={
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => reset()}>
+              <RotateCw className="size-4" /> Try again
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/">
+                <Home className="size-4" /> Home
+              </Link>
+            </Button>
+          </div>
+        }
+      />
     </div>
   );
 }

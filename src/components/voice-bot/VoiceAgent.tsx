@@ -6,15 +6,29 @@ import { CallControls } from "./CallControls";
 import { TranscriptDisplay } from "./TranscriptDisplay";
 import { cn, formatDuration } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import {
+  User,
+  Phone,
+  Mail,
+  Briefcase,
+  Building2,
+  CalendarCheck,
+  CheckCircle2,
+  Lock,
+  ShieldCheck,
+  ListChecks,
+  Check,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const CONVERSATION_STEPS = [
-  { step: "collect_name", label: "Full Name", icon: "👤" },
-  { step: "collect_phone", label: "Phone Number", icon: "📱" },
-  { step: "collect_email", label: "Email Address", icon: "✉️" },
-  { step: "confirm_interest", label: "Interest Area", icon: "💼" },
-  { step: "company_info", label: "Company Overview", icon: "🏢" },
-  { step: "schedule_interview", label: "Schedule Interview", icon: "📅" },
-  { step: "confirmation", label: "Confirmation", icon: "✅" },
+  { step: "collect_name", label: "Full name", icon: User },
+  { step: "collect_phone", label: "Phone number", icon: Phone },
+  { step: "collect_email", label: "Email address", icon: Mail },
+  { step: "confirm_interest", label: "Interest area", icon: Briefcase },
+  { step: "company_info", label: "Company overview", icon: Building2 },
+  { step: "schedule_interview", label: "Schedule interview", icon: CalendarCheck },
+  { step: "confirmation", label: "Confirmation", icon: CheckCircle2 },
 ];
 
 export function VoiceAgent() {
@@ -35,31 +49,26 @@ export function VoiceAgent() {
   const [isMuted, setIsMuted] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
 
-  // Timer
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isCallActive) {
       setElapsed(0);
-      interval = setInterval(() => setElapsed((prev) => prev + 1), 1000);
-    } else {
-      if (callStatus === "idle") setElapsed(0);
+      interval = setInterval(() => setElapsed((p) => p + 1), 1000);
+    } else if (callStatus === "idle") {
+      setElapsed(0);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [isCallActive, callStatus]);
 
-  // Step detection from transcript
   useEffect(() => {
     if (transcript.length === 0) {
       setCurrentStep(-1);
       return;
     }
-    const lastAssistant = [...transcript]
-      .reverse()
-      .find((t) => t.role === "assistant");
+    const lastAssistant = [...transcript].reverse().find((t) => t.role === "assistant");
     if (!lastAssistant) return;
-
     const text = lastAssistant.text.toLowerCase();
     const stepKeywords = [
       { keywords: ["your name", "full name", "may i know your name"], step: 0 },
@@ -70,7 +79,6 @@ export function VoiceAgent() {
       { keywords: ["schedule", "interview", "assessment", "preferred date"], step: 5 },
       { keywords: ["scheduled", "confirmation", "confirmed", "confirmation email"], step: 6 },
     ];
-
     for (const { keywords, step } of stepKeywords) {
       if (keywords.some((kw) => text.includes(kw)) && step > currentStep) {
         setCurrentStep(step);
@@ -86,50 +94,42 @@ export function VoiceAgent() {
 
   const statusLabel =
     callStatus === "connecting"
-      ? "Connecting..."
+      ? "Connecting…"
       : isCallActive
-        ? "Call in progress — speak freely"
+        ? "Listening — speak freely"
         : callStatus === "ended"
           ? "Call ended. Thank you!"
           : callStatus === "error"
-            ? error || "An error occurred"
-            : "Click to start a conversation";
+            ? error || "Something went wrong"
+            : "Tap to start the conversation";
 
   return (
-    <div className="space-y-8">
-      {/* Voice Card */}
+    <div className="space-y-6">
+      {/* Voice card */}
       <div
         className={cn(
-          "glass rounded-3xl p-10 transition-all duration-300",
-          isCallActive && "border-primary/30 shadow-glow"
+          "rounded-2xl border bg-card p-8 shadow-sm transition-all duration-300 sm:p-10",
+          isCallActive ? "border-primary/40 shadow-md" : "border-border"
         )}
       >
         {!consentGiven ? (
-          <div className="text-center py-6">
-            <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-6">
-              <span className="text-2xl">🔒</span>
+          <div className="mx-auto max-w-md py-2 text-center">
+            <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-xl border border-border bg-muted">
+              <Lock className="size-5 text-muted-foreground" />
             </div>
-            <h3 className="font-heading text-lg font-bold mb-3 text-foreground">Consent & Data Recording</h3>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto mb-6 leading-relaxed">
-              Zensar Technologies uses an AI voice assistant to screen candidates.
-              By proceeding, you consent to the recording of your voice call, transcript generation,
-              and the extraction of recruitment details (name, email, phone) to update your profile.
+            <h3 className="text-lg font-semibold tracking-tight">Consent to continue</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+              This AI assistant records the call, generates a transcript, and extracts your
+              details (name, email, phone) to build your candidate profile.
             </p>
-            <button
-              onClick={() => setConsentGiven(true)}
-              className="px-6 py-2.5 rounded-full bg-gradient-brand text-white text-xs font-semibold hover:opacity-90 shadow-glow-sm hover:shadow-glow transition-all cursor-pointer border-none"
-              id="agree-button"
-            >
-              I Agree & Consent
-            </button>
+            <Button className="mt-6" onClick={() => setConsentGiven(true)} id="agree-button">
+              <ShieldCheck className="size-4" />
+              I agree &amp; consent
+            </Button>
           </div>
         ) : (
           <>
-            <AudioVisualizer
-              isActive={isCallActive}
-              volumeLevel={volumeLevel}
-            />
-
+            <AudioVisualizer isActive={isCallActive} volumeLevel={volumeLevel} />
             <CallControls
               callStatus={callStatus}
               isMuted={isMuted}
@@ -137,82 +137,65 @@ export function VoiceAgent() {
               onStop={stopCall}
               onToggleMute={handleToggleMute}
             />
-
-            <p
-              className={cn(
-                "text-sm text-center mb-1 transition-colors",
-                isCallActive ? "text-primary" : "text-muted-foreground"
-              )}
-            >
+            <p className={cn("mb-1 text-center text-sm transition-colors", isCallActive ? "text-foreground" : "text-muted-foreground")}>
               {statusLabel}
             </p>
-
-            <p
-              className={cn(
-                "text-xs text-center font-mono text-muted-foreground/60 tabular-nums transition-opacity",
-                isCallActive ? "opacity-100" : "opacity-0"
-              )}
-            >
+            <p className={cn("text-center font-mono text-xs tabular-nums text-muted-foreground transition-opacity", isCallActive ? "opacity-100" : "opacity-0")}>
               {formatDuration(elapsed)}
             </p>
-
             {callStatus === "ended" && (
-              <div className="text-center mt-4">
-                <button
-                  onClick={resetCall}
-                  className="text-sm text-primary hover:text-primary/80 underline underline-offset-4 transition-colors"
-                >
+              <div className="mt-4 text-center">
+                <Button variant="link" size="sm" onClick={resetCall}>
                   Start a new call
-                </button>
+                </Button>
               </div>
             )}
           </>
         )}
       </div>
 
-      {/* Transcript + Steps Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Transcript + flow */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <TranscriptDisplay transcript={transcript} isActive={isCallActive} />
 
-        {/* Conversation Steps */}
-        <div className="glass rounded-xl p-6">
-          <div className="flex items-center gap-2.5 mb-5">
-            <span className="text-lg">📋</span>
-            <h3 className="font-heading font-semibold text-foreground">
-              Conversation Flow
-            </h3>
+        <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+          <div className="mb-4 flex items-center gap-2">
+            <ListChecks className="size-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold tracking-tight">Conversation flow</h3>
           </div>
-          <div className="flex flex-col gap-1">
-            {CONVERSATION_STEPS.map((step, i) => (
-              <div
-                key={step.step}
-                className={cn(
-                  "flex items-center gap-3.5 px-4 py-3.5 rounded-lg border border-transparent transition-all",
-                  i === currentStep &&
-                    "bg-primary/10 border-primary/20",
-                  i < currentStep && "opacity-50"
-                )}
-              >
-                <span
+          <div className="space-y-1">
+            {CONVERSATION_STEPS.map((step, i) => {
+              const active = i === currentStep;
+              const done = i < currentStep;
+              return (
+                <div
+                  key={step.step}
                   className={cn(
-                    "w-9 h-9 flex items-center justify-center rounded-lg text-lg border",
-                    i === currentStep
-                      ? "bg-primary/10 border-primary/20"
-                      : i < currentStep
-                        ? "bg-success-bg border-success/20"
-                        : "bg-muted/30 border-border"
+                    "flex items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors",
+                    active && "border-primary/20 bg-primary/[0.06]"
                   )}
                 >
-                  {step.icon}
-                </span>
-                <span className="text-sm font-medium text-foreground flex-1">
-                  {step.label}
-                </span>
-                <span className="text-[0.7rem] text-muted-foreground/60 font-medium">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-              </div>
-            ))}
+                  <span
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                      active
+                        ? "border-primary/20 bg-primary/10 text-primary"
+                        : done
+                          ? "border-success/20 bg-success/10 text-success"
+                          : "border-border bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {done ? <Check className="size-4" /> : <step.icon className="size-4" />}
+                  </span>
+                  <span className={cn("flex-1 text-sm font-medium", !active && !done && "text-muted-foreground", done && "text-muted-foreground/70")}>
+                    {step.label}
+                  </span>
+                  <span className="font-mono text-2xs text-muted-foreground/60 tabular-nums">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

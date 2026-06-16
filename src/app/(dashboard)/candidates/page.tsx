@@ -1,10 +1,24 @@
 "use client";
 
-import { cn, getStatusColor, formatStatusLabel, formatDate } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
-import { Users, Search, Mail, Briefcase, Loader2 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { cn, formatDate, formatStatusLabel } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { InitialsAvatar } from "@/components/ui/avatar";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Users, Search, Briefcase } from "lucide-react";
 
 interface Candidate {
   id: string;
@@ -18,7 +32,7 @@ interface Candidate {
   _count?: { calls: number; appointments: number };
 }
 
-const ALL_STATUSES = [
+const STATUS_FILTERS = [
   "INTERVIEW_SCHEDULED",
   "SCREENING",
   "HIRED",
@@ -28,6 +42,18 @@ const ALL_STATUSES = [
   "INTERVIEWED",
   "REJECTED",
 ];
+
+const STATUS_VARIANT: Record<string, BadgeProps["variant"]> = {
+  HIRED: "success",
+  INTERVIEW_SCHEDULED: "primary",
+  OFFER_SENT: "primary",
+  SCREENING: "secondary",
+  INTERVIEWED: "secondary",
+  NEW: "secondary",
+  CONTACTED: "secondary",
+  REJECTED: "destructive",
+  WITHDRAWN: "warning",
+};
 
 export default function CandidatesPage() {
   const router = useRouter();
@@ -43,7 +69,6 @@ export default function CandidatesPage() {
       const params = new URLSearchParams({ pageSize: "50" });
       if (search) params.set("search", search);
       if (filterStatus) params.set("status", filterStatus);
-
       const res = await fetch(`/api/candidates?${params}`);
       const data = await res.json();
       setCandidates(data.data || []);
@@ -57,141 +82,146 @@ export default function CandidatesPage() {
   }, [search, filterStatus]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchCandidates, 300); // debounce search
+    const timer = setTimeout(fetchCandidates, 300);
     return () => clearTimeout(timer);
   }, [fetchCandidates]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">
-          <span className="gradient-text">Candidates</span>
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage and track all recruitment candidates
-          {total > 0 && (
-            <span className="text-primary ml-2">({total} total)</span>
-          )}
-        </p>
-      </div>
+      <PageHeader
+        title="Candidates"
+        description="Every candidate captured from voice screenings."
+        actions={
+          total > 0 ? (
+            <Badge variant="secondary" className="tabular-nums">
+              {total} total
+            </Badge>
+          ) : undefined
+        }
+      />
 
       {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      <div className="space-y-3">
+        <div className="relative max-w-sm">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search candidates..."
+            placeholder="Search by name, email, or role…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-muted/30"
+            className="pl-9"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setFilterStatus("")}
-            className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-              !filterStatus
-                ? "bg-primary/10 text-primary border-primary/20"
-                : "text-muted-foreground border-border hover:border-primary/20"
-            )}
-          >
+        <div className="flex flex-wrap gap-1.5">
+          <FilterChip active={!filterStatus} onClick={() => setFilterStatus("")}>
             All
-          </button>
-          {ALL_STATUSES.map((s) => (
-            <button
+          </FilterChip>
+          {STATUS_FILTERS.map((s) => (
+            <FilterChip
               key={s}
+              active={s === filterStatus}
               onClick={() => setFilterStatus(s === filterStatus ? "" : s)}
-              className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                s === filterStatus
-                  ? getStatusColor(s)
-                  : "text-muted-foreground border-border hover:border-primary/20"
-              )}
             >
               {formatStatusLabel(s)}
-            </button>
+            </FilterChip>
           ))}
         </div>
       </div>
 
       {/* Table */}
-      <div className="glass rounded-xl overflow-hidden">
+      <Card className="overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 rounded-lg" />
+            ))}
           </div>
         ) : candidates.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/20">
-                  <th className="text-left font-medium text-muted-foreground px-6 py-3">Candidate</th>
-                  <th className="text-left font-medium text-muted-foreground px-6 py-3">Role</th>
-                  <th className="text-left font-medium text-muted-foreground px-6 py-3">Experience</th>
-                  <th className="text-left font-medium text-muted-foreground px-6 py-3">Status</th>
-                  <th className="text-left font-medium text-muted-foreground px-6 py-3">Added</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.map((c) => (
-                  <tr
-                    key={c.id}
-                    onClick={() => router.push(`/candidates/${c.id}`)}
-                    className="border-b border-border/50 hover:bg-muted/10 transition-colors cursor-pointer"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                          <Users className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{c.name}</p>
-                          {c.email && (
-                            <span className="flex items-center gap-1 text-[0.7rem] text-muted-foreground mt-0.5">
-                              <Mail className="w-3 h-3" />
-                              {c.email}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="flex items-center gap-1.5 text-foreground">
-                        <Briefcase className="w-3.5 h-3.5 text-muted-foreground" />
-                        {c.jobRole || "—"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground">{c.experience || "—"}</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={cn(
-                          "inline-flex items-center px-2 py-0.5 rounded-full text-[0.7rem] font-semibold border",
-                          getStatusColor(c.status)
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Candidate</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Experience</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Added</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {candidates.map((c) => (
+                <TableRow
+                  key={c.id}
+                  onClick={() => router.push(`/candidates/${c.id}`)}
+                  className="cursor-pointer"
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <InitialsAvatar name={c.name} />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{c.name}</p>
+                        {c.email && (
+                          <p className="truncate text-xs text-muted-foreground">{c.email}</p>
                         )}
-                      >
-                        {formatStatusLabel(c.status)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-muted-foreground">
-                      {formatDate(c.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex items-center gap-1.5 text-sm">
+                      <Briefcase className="size-3.5 text-muted-foreground" />
+                      {c.jobRole || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {c.experience || "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_VARIANT[c.status] ?? "secondary"} dot>
+                      {formatStatusLabel(c.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                    {formatDate(c.createdAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Users className="w-12 h-12 text-muted-foreground/20 mb-4" />
-            <p className="text-sm text-muted-foreground font-medium">No candidates yet</p>
-            <p className="text-xs text-muted-foreground/60 mt-1 max-w-sm">
-              Candidates will appear here automatically after voice calls are completed.
-              Start a call from the landing page to begin.
-            </p>
-          </div>
+          <EmptyState
+            icon={Users}
+            title={search || filterStatus ? "No matching candidates" : "No candidates yet"}
+            description={
+              search || filterStatus
+                ? "Try a different search term or clear the filters."
+                : "Candidates are captured automatically after each completed voice screening."
+            }
+            className="border-0"
+          />
         )}
-      </div>
+      </Card>
     </div>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-primary/20 bg-primary/10 text-primary"
+          : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
   );
 }

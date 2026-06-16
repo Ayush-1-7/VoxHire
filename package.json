@@ -11,6 +11,8 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
+    "check:config": "node scripts/check-config.mjs",
+    "google:token": "node scripts/get-google-calendar-token.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

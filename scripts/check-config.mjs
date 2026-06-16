@@ -15,13 +15,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
-// Load .env then .env.local (local overrides), without external deps.
+// Load .env then .env.local, matching Next.js precedence: a real shell env var
+// always wins; among files, .env.local overrides .env.
+const shellKeys = new Set(Object.keys(process.env));
 for (const file of [".env", ".env.local"]) {
   const p = path.join(process.cwd(), file);
   if (!fs.existsSync(p)) continue;
   for (const line of fs.readFileSync(p, "utf8").split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (m && process.env[m[1]] === undefined) {
+    if (m && !shellKeys.has(m[1])) {
       process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
     }
   }
@@ -93,7 +95,7 @@ if (/db\.[a-z0-9]+\.supabase\.co/i.test(dbUrl)) {
     "  ✗ DATABASE_URL uses the DIRECT host (db.<ref>.supabase.co) — IPv6-only,\n" +
       "    UNREACHABLE from Vercel. Switch to the Supavisor pooler from Supabase\n" +
       "    dashboard → Connect → 'Transaction pooler':\n" +
-      "      postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true\n" +
+      "      postgresql://postgres.<ref>:<pwd>@aws-<n>-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true\n" +
       "    (and DIRECT_URL → 'Session pooler' on port 5432). Works locally via IPv6,\n" +
       "    so this only bites in production."
   );

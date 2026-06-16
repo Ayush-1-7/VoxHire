@@ -25,11 +25,13 @@ so it only breaks in production.
 | `DATABASE_URL` | Transaction pooler | 6543 (append `?pgbouncer=true`) |
 | `DIRECT_URL` | Session pooler | 5432 |
 
-Format (note the user becomes `postgres.<ref>`):
+This project's verified pooler host is **`aws-1-ap-northeast-1.pooler.supabase.com`**
+(region ap-northeast-1, aws-1 generation). Format (note the user becomes
+`postgres.<ref>`, and `@` in the password is URL-encoded as `%40`):
 
 ```
-DATABASE_URL=postgresql://postgres.dxgoftplckymprxlucka:<PASSWORD>@aws-0-<REGION>.pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL=postgresql://postgres.dxgoftplckymprxlucka:<PASSWORD>@aws-0-<REGION>.pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://postgres.dxgoftplckymprxlucka:<PASSWORD>@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+DIRECT_URL=postgresql://postgres.dxgoftplckymprxlucka:<PASSWORD>@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
 ```
 
 Set both in **Vercel → Project → Settings → Environment Variables (Production)**,

@@ -440,14 +440,23 @@ function parseRelativeDate(text: string): Date | null {
     return null;
   }
 
-  const timeMatch = textLower.match(/\b(?:at|around)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  const hourWordToNum: Record<string, number> = {
+    one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+    seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  };
+  // Accept both digit ("11 am") and word ("eleven am") hours, matching the
+  // month-based parser so spoken times aren't silently defaulted.
+  const timeMatch = textLower.match(
+    /\b(?:at|around)?\s*(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?::(\d{2}))?\s*(am|pm)\b/i
+  );
   let hour = 10;
   let minutes = 0;
   if (timeMatch) {
-    hour = parseInt(timeMatch[1]);
+    const hourToken = timeMatch[1].toLowerCase();
+    hour = hourWordToNum[hourToken] ?? parseInt(hourToken);
     minutes = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
     const isPm = timeMatch[3].toLowerCase() === "pm";
-    
+
     if (isPm && hour < 12) hour += 12;
     if (!isPm && hour === 12) hour = 0;
   }
